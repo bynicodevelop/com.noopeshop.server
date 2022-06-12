@@ -3,46 +3,6 @@ const admin = require("firebase-admin")
 
 admin.initializeApp();
 
-const data = [
-    {
-        "title": "Body Lotion - Fitness extreme",
-        "description": "This is a product description",
-        "media": "assets/samples/1.png",
-        "mediaType": "MediaTypeEnum.image",
-    },
-    {
-        "title": "Product 2",
-        "description": "This is a product description",
-        "media": "assets/samples/2.png",
-        "mediaType": "MediaTypeEnum.image",
-    },
-    {
-        "title": "Product 3",
-        "description": "This is a product description",
-        "media": "assets/samples/3.png",
-        "mediaType": "MediaTypeEnum.image",
-    },
-    // {
-    //     "title": "Product 3",
-    //     "description": "This is a product description",
-    //     "media": "assets/samples/4.mp4",
-    //     "mediaType": "MediaTypeEnum.video",
-    // },
-];
-
-// if (process.env.FUNCTIONS_EMULATOR !== "true") {
-    exports.populate = functions.https.onRequest(async (request, response) => {
-        console.log(process.env.FUNCTIONS_EMULATOR);
-        for (let i = 0; i < data.length; i++) {
-            data[i].createdAt = admin.firestore.FieldValue.serverTimestamp();
-
-            await admin.firestore().collection("products").add(data[i]);
-        }
-
-        response.send("Hello from Firebase!");
-    });
-// }
-
 exports.onUploadProductFile = functions.storage.object().onFinalize(async (object) => { 
     const fileBucket = object.bucket;
     const filePath = object.name;
@@ -60,7 +20,11 @@ exports.onUploadProductFile = functions.storage.object().onFinalize(async (objec
         mediaType = "MediaTypeEnum.image";
     }
 
-    const productsRef = await admin.firestore().collection("products").where("media", "==", filePath).get();
+    const productsRef = await admin
+        .firestore()
+        .collection("products")
+        .where("media", "array-contains", filePath)
+        .get();
 
     if(productsRef.empty) {
         return;
@@ -76,6 +40,26 @@ exports.onUploadProductFile = functions.storage.object().onFinalize(async (objec
         updatedAt: createdAt,
     });
 });
+
+exports.onProductDeleted = functions.firestore.document("products/{productId}").onDelete(async (snapshot) => { 
+    const { media } = snapshot.data();
+
+    if(!media) {
+        return;
+    }
+
+    // TODO: Delete favorites
+
+    const bucket = admin.storage().bucket();
+
+    for(let i = 0; i < media.length; i++) {
+        functions.logger.log(`Deleting ${media[i]}`);
+        const file = bucket.file(media[i]);
+        await file.delete();
+    }
+
+    return;
+})
 
 exports.onFavoriteCreated = functions.firestore.document("users/{userId}/favorites/{favoriteId}").onCreate(async (snapshot, context) => {
     const {userId, favoriteId} = context.params;
