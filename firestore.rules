@@ -7,10 +7,18 @@ service cloud.firestore {
 
     match /products/{productId} {
       allow list, get: if request.auth != null;
+
+      match /variantes/{varianteId} {
+        allow list, get: if request.auth != null;
+      }
     }
 
-    match /users/{userId}/favorites/{favoriteId} {
-      allow list, get, create, delete: if request.auth != null && request.auth.uid == userId;
+    match /users/{userId} {
+      allow update, create, get: if request.auth != null && request.auth.uid == userId;
+      
+      match /favorites/{favoriteId} {
+        allow list, get, create, delete: if request.auth != null && request.auth.uid == userId;
+      }
     }
   }
 }
